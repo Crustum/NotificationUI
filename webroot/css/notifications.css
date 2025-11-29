@@ -116,6 +116,7 @@
 .notifications-mode-panel .notifications-content {
     height: calc(100vh - 120px);
     overflow-y: auto;
+    max-height: initial;
 }
 
 .notifications-mode-panel .notifications-header {
@@ -341,7 +342,7 @@
 .notifications-content {
     flex: 1;
     overflow-y: auto;
-    max-height: 24rem; /* 384px */
+    max-height: 24rem;
     background: white;
 }
 
