@@ -298,7 +298,6 @@ class CakeNotificationWidget {
 
     isPanelMode() {
         const isPanel = this.wrapper && this.wrapper.classList.contains('notifications-mode-panel');
-        console.log('Panel mode check:', isPanel, this.wrapper);
         return isPanel;
     }
 

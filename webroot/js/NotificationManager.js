@@ -97,12 +97,23 @@ class CakeNotificationManager {
     }
 
     handleLoadSuccess(result, append) {
+        const normalizeNotification = (notification) => {
+            if (notification.data?.actions && !notification.actions) {
+                notification.actions = notification.data.actions;
+            }
+            notification._source = 'api';
+            return notification;
+        };
+
         if (append) {
-            this.notifications = this.notifications.concat(result.data);
+            const normalized = (result.data || []).map(normalizeNotification);
+            this.notifications = this.notifications.concat(normalized);
         } else {
             const preserved = this.notifications.filter(n => n._source !== 'api');
             const preservedIds = new Set(preserved.map(n => n.id));
-            const apiItems = (result.data || []).filter(n => !preservedIds.has(n.id));
+            const apiItems = (result.data || [])
+                .filter(n => !preservedIds.has(n.id))
+                .map(normalizeNotification);
             this.notifications = preserved.concat(apiItems);
             this.lastCheckTime = new Date();
         }
@@ -222,13 +233,22 @@ class CakeNotificationManager {
             const result = await response.json();
 
             if (result.success && result.data.length > 0) {
+                const existingIds = new Set(this.notifications.map(n => n.id));
                 const newNotifications = result.data.filter(notif => {
                     const notifTime = new Date(notif.created_at || notif.created);
-                    return notifTime > this.lastCheckTime &&
-                           !this.notifications.find(n => n.id === notif.id);
+                    if (notifTime <= this.lastCheckTime) {
+                        return false;
+                    }
+                    if (existingIds.has(notif.id)) {
+                        return false;
+                    }
+                    return true;
                 });
 
                 newNotifications.forEach(notif => {
+                    if (notif.data?.actions && !notif.actions) {
+                        notif.actions = notif.data.actions;
+                    }
                     notif._isNew = true;
                     this.addNotification(notif);
                 });
