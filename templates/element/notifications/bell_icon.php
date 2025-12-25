@@ -42,16 +42,31 @@ if (!$enablePolling) {
 }
 
 $broadcastingConfig = null;
+$broadcasterType = 'pusher';
 if ($broadcasting && is_array($broadcasting)) {
-    $broadcastingConfig = array_merge([
-        'userId' => null,
-        'userName' => 'Anonymous',
-        'pusherKey' => 'app-key',
-        'pusherHost' => '127.0.0.1',
-        'pusherPort' => 8080,
-        'pusherCluster' => 'mt1',
-        'channelName' => null,
-    ], $broadcasting);
+    $broadcasterType = $broadcasting['broadcaster'] ?? 'pusher';
+
+    if ($broadcasterType === 'mercure') {
+        $broadcastingConfig = array_merge([
+            'broadcaster' => 'mercure',
+            'userId' => null,
+            'userName' => 'Anonymous',
+            'mercureUrl' => '/.well-known/mercure',
+            'authEndpoint' => '/broadcasting/auth',
+            'channelName' => null,
+        ], $broadcasting);
+    } else {
+        $broadcastingConfig = array_merge([
+            'broadcaster' => 'pusher',
+            'userId' => null,
+            'userName' => 'Anonymous',
+            'pusherKey' => 'app-key',
+            'pusherHost' => '127.0.0.1',
+            'pusherPort' => 8080,
+            'pusherCluster' => 'mt1',
+            'channelName' => null,
+        ], $broadcasting);
+    }
 
     if (!$broadcastingConfig['channelName'] && isset($broadcastingConfig['userId'])) {
         $broadcastingConfig['channelName'] = "App.Model.Entity.User.{$broadcastingConfig['userId']}";
@@ -59,7 +74,6 @@ if ($broadcasting && is_array($broadcasting)) {
 }
 ?>
 
-<!-- Notification Bell Icon -->
 <div class="notifications-wrapper notifications-mode-<?= h($mode) ?>" data-theme="<?= h($theme) ?>">
     <a class="notifications-bell"
             id="<?= h($bellId) ?>"
@@ -98,8 +112,7 @@ if ($broadcasting && is_array($broadcasting)) {
     </div>
 
     <?php if ($mode === 'panel'): ?>
-    <!-- Backdrop for panel mode -->
-    <div class="notifications-backdrop" id="notificationsBackdrop" style="display: none;"></div>
+        <div class="notifications-backdrop" id="notificationsBackdrop" style="display: none;"></div>
     <?php endif; ?>
 </div>
 
@@ -107,7 +120,11 @@ if ($broadcasting && is_array($broadcasting)) {
 <?= $this->AssetCompress->script('Crustum/NotificationUI.notifications', ['raw' => Configure::read('debug')]) ?>
 
 <?php if ($broadcastingConfig): ?>
+<?php if ($broadcasterType === 'mercure'): ?>
+<?= $this->AssetCompress->script('Crustum/NotificationUI.mercure-broadcasting', ['raw' => Configure::read('debug')]) ?>
+<?php else: ?>
 <?= $this->AssetCompress->script('Crustum/NotificationUI.broadcasting', ['raw' => Configure::read('debug')]) ?>
+<?php endif; ?>
 
 <script>
 window.broadcastingConfig = <?= json_encode($broadcastingConfig) ?>;
@@ -126,10 +143,6 @@ document.addEventListener('DOMContentLoaded', function() {
         contentId: <?= json_encode($contentId) ?>,
         badgeId: <?= json_encode($badgeId) ?>,
         markReadOnClick: <?= json_encode($markReadOnClick) ?>
-    });
-
-    console.log('Notification system initialized', {
-        broadcasting: <?= json_encode($broadcastingConfig !== null) ?>
     });
 });
 </script>

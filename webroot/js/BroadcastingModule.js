@@ -72,17 +72,14 @@ class BroadcastNotificationsModule {
         if (this.echo.connector && this.echo.connector.pusher) {
             this.echo.connector.pusher.connection.bind('connected', () => {
                 this.connected = true;
-                console.log('Broadcasting Module: Connected to WebSocket');
-                this.subscribeToChannel();
             });
 
             this.echo.connector.pusher.connection.bind('disconnected', () => {
                 this.connected = false;
-                console.log('Broadcasting Module: Disconnected from WebSocket');
             });
 
             this.echo.connector.pusher.connection.bind('error', (error) => {
-                console.error('Broadcasting Module: Connection error', error);
+                console.warn('Broadcasting Module: Connection error', error);
             });
         }
     }
@@ -93,12 +90,9 @@ class BroadcastNotificationsModule {
             return;
         }
 
-        console.log(`Broadcasting Module: Subscribing to ${this.options.channelName}`);
-
         const channel = this.echo.private(this.options.channelName);
 
         channel.subscription.bind('pusher:subscription_succeeded', () => {
-            console.log(`Broadcasting Module: Subscription succeeded for ${this.options.channelName}`);
         });
 
         channel.subscription.bind('pusher:subscription_error', (error) => {
@@ -108,7 +102,6 @@ class BroadcastNotificationsModule {
         this.echo.connector.pusher.bind_global((eventName, data) => {
             if (eventName.startsWith('pusher:')) return;
 
-            console.log('Broadcasting Module: Event received', { event: eventName, data });
             this.handleBroadcastEvent(eventName, data);
         });
     }
@@ -144,10 +137,8 @@ class BroadcastNotificationsModule {
         }
         if (data.actions) {
             notification.actions = data.actions;
-            console.log('Broadcasting Module: Actions found', data.actions);
         }
 
-        console.log('Broadcasting Module: Final notification', notification);
         this.manager.addNotification(notification);
     }
 
@@ -171,12 +162,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const broadcastConfig = window.broadcastingConfig;
     if (!broadcastConfig) return;
 
+    if (broadcastConfig.broadcaster === 'mercure') {
+        return;
+    }
+
     const initBroadcasting = () => {
         try {
             const manager = window.CakeNotificationManager.get();
             const module = new BroadcastNotificationsModule(broadcastConfig);
             module.init(manager);
-            console.log('Broadcasting Module: Initialized');
         } catch (e) {
             console.error('Broadcasting Module: Initialization failed, retrying...', e.message);
             setTimeout(initBroadcasting, 100);

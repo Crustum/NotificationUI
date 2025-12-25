@@ -19,7 +19,8 @@
         "cakephp/cakephp-codesniffer": "^5.0"
     },
     "suggest": {
-        "crustum/notification-broadcasting": "Broadcasting notification channel"
+        "crustum/notification-broadcasting": "Broadcasting notification channel",
+        "crustum/mercure-broadcasting": "Mercure broadcaster driver"
     },
     "autoload": {
         "psr-4": {

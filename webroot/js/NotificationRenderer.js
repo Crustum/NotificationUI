@@ -129,13 +129,11 @@ class CakeNotificationRenderer {
     }
 
     defaultActionsTemplate(actions, renderer) {
-        console.log('NotificationRenderer: Rendering actions', actions);
         const actionsHtml = actions.map(action => renderer.renderAction(action)).join('');
         return `<div class="notification-actions">${actionsHtml}</div>`;
     }
 
     defaultActionTemplate(action, renderer) {
-        // Support both old format (color, name) and new format (type, url)
         const colorClass = action.color ? `btn-${action.color}` : (action.type ? `btn-${action.type}` : '');
         const disabled = action.isDisabled ? 'disabled' : '';
         const actionName = action.name || action.url || 'action';
