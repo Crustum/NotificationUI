@@ -60,11 +60,6 @@ class BroadcastNotificationsModule {
             disableStats: true,
             enabledTransports: ['ws', 'wss'],
             forceTLS: false,
-            auth: {
-                headers: {
-                    'X-CSRF-Token': this.getCsrfToken()
-                }
-            }
         });
 
         window.Echo = this.echo;
@@ -72,6 +67,7 @@ class BroadcastNotificationsModule {
         if (this.echo.connector && this.echo.connector.pusher) {
             this.echo.connector.pusher.connection.bind('connected', () => {
                 this.connected = true;
+                this.subscribeToChannel();
             });
 
             this.echo.connector.pusher.connection.bind('disconnected', () => {
@@ -116,6 +112,16 @@ class BroadcastNotificationsModule {
             }
         }
 
+        if (eventName === 'notification.marked-read') {
+            this.handleMarkAsReadUpdate(data);
+            return;
+        }
+
+        if (eventName === 'notification.marked-all-read') {
+            this.handleMarkAllAsReadUpdate(data);
+            return;
+        }
+
         const notification = {
             id: data.id || this.generateId(),
             title: data.title || eventName.replace(/\./g, ' '),
@@ -142,9 +148,26 @@ class BroadcastNotificationsModule {
         this.manager.addNotification(notification);
     }
 
-    getCsrfToken() {
-        const meta = document.querySelector('meta[name="csrfToken"]');
-        return meta ? meta.getAttribute('content') : '';
+    handleMarkAsReadUpdate(data) {
+        if (!this.manager) {
+            return;
+        }
+
+        const notificationId = data.notification_id;
+        this.manager.removeNotification(notificationId);
+        this.manager.unreadCount = data.unread_count || Math.max(0, this.manager.unreadCount - 1);
+        this.manager.emit('notification:marked-read', { notificationId });
+    }
+
+    handleMarkAllAsReadUpdate(data) {
+        if (!this.manager) {
+            return;
+        }
+
+        this.manager.notifications = [];
+        this.manager.unreadCount = data.unread_count || 0;
+        this.manager.emit('notifications:changed', { notifications: [] });
+        this.manager.emit('notifications:all-marked-read');
     }
 
     generateId() {
@@ -159,18 +182,23 @@ class BroadcastNotificationsModule {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Broadcasting Module: Initialization ...');
     const broadcastConfig = window.broadcastingConfig;
     if (!broadcastConfig) return;
 
+    console.log('Broadcasting Module: Initialization ...');
     if (broadcastConfig.broadcaster === 'mercure') {
         return;
     }
+    console.log('Broadcasting Module: Initialization ...');
+    console.log(broadcastConfig);
 
     const initBroadcasting = () => {
         try {
             const manager = window.CakeNotificationManager.get();
             const module = new BroadcastNotificationsModule(broadcastConfig);
             module.init(manager);
+            console.log('Broadcasting Module: Initialization ...');
         } catch (e) {
             console.error('Broadcasting Module: Initialization failed, retrying...', e.message);
             setTimeout(initBroadcasting, 100);

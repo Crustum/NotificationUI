@@ -93,6 +93,16 @@ class MercureBroadcastingModule {
             }
         }
 
+        if (eventName === 'notification.marked-read') {
+            this.handleMarkAsReadUpdate(data);
+            return;
+        }
+
+        if (eventName === 'notification.marked-all-read') {
+            this.handleMarkAllAsReadUpdate(data);
+            return;
+        }
+
         const notification = {
             id: data.id || this.generateId(),
             title: data.title || data.data?.title || eventName.replace(/\./g, ' '),
@@ -119,9 +129,26 @@ class MercureBroadcastingModule {
         this.manager.addNotification(notification);
     }
 
-    getCsrfToken() {
-        const meta = document.querySelector('meta[name="csrfToken"]');
-        return meta ? meta.getAttribute('content') : '';
+    handleMarkAsReadUpdate(data) {
+        if (!this.manager) {
+            return;
+        }
+
+        const notificationId = data.notification_id;
+        this.manager.removeNotification(notificationId);
+        this.manager.unreadCount = data.unread_count || Math.max(0, this.manager.unreadCount - 1);
+        this.manager.emit('notification:marked-read', { notificationId });
+    }
+
+    handleMarkAllAsReadUpdate(data) {
+        if (!this.manager) {
+            return;
+        }
+
+        this.manager.notifications = [];
+        this.manager.unreadCount = data.unread_count || 0;
+        this.manager.emit('notifications:changed', { notifications: [] });
+        this.manager.emit('notifications:all-marked-read');
     }
 
     generateId() {

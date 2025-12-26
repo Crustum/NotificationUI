@@ -126,13 +126,6 @@ class CakeNotificationManager {
     }
 
     async markAsRead(notificationId) {
-        const notification = this.notifications.find(n => n.id === notificationId);
-
-        if (notification && notification._source !== 'api') {
-            this.removeNotification(notificationId);
-            return;
-        }
-
         try {
             const response = await fetch(`/notification/notifications/${notificationId}/read.json`, {
                 method: 'PATCH',
@@ -147,8 +140,17 @@ class CakeNotificationManager {
             if (response.ok) {
                 await this.loadNotifications();
                 this.emit('notification:marked-read', { notificationId });
+            } else {
+                const notification = this.notifications.find(n => n.id === notificationId);
+                if (notification && notification._source !== 'api') {
+                    this.removeNotification(notificationId);
+                }
             }
         } catch (error) {
+            const notification = this.notifications.find(n => n.id === notificationId);
+            if (notification && notification._source !== 'api') {
+                this.removeNotification(notificationId);
+            }
             this.emit('notifications:error', { error });
         }
     }
@@ -289,7 +291,10 @@ class CakeNotificationManager {
     }
 
     getCsrfToken() {
-        const meta = document.querySelector('meta[name="csrfToken"]');
+        let meta = document.querySelector('meta[name="csrfToken"]');
+        if (!meta) {
+            meta = document.querySelector('meta[name="csrf-token"]');
+        }
         return meta ? meta.getAttribute('content') : '';
     }
 
