@@ -303,7 +303,6 @@ class NotificationsController extends Controller
         $notification->read_at = new DateTime();
 
         if ($this->Notifications->save($notification)) {
-            $notifiable = $this->getNotifiableIdentity();
             $userEntity = $this->request->getAttribute('identity')?->getOriginalData();
 
             if ($userEntity instanceof EntityInterface) {
