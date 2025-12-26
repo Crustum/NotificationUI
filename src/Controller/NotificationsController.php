@@ -4,10 +4,12 @@ declare(strict_types=1);
 namespace Crustum\NotificationUI\Controller;
 
 use Cake\Controller\Controller;
+use Cake\Datasource\EntityInterface;
 use Cake\Datasource\QueryInterface;
 use Cake\I18n\DateTime;
 use Cake\ORM\Locator\LocatorAwareTrait;
 use Crustum\Notification\Model\Table\NotificationsTable;
+use Crustum\NotificationUI\Service\NotificationBroadcastingService;
 use Exception;
 
 /**
@@ -29,6 +31,13 @@ class NotificationsController extends Controller
     protected NotificationsTable $Notifications;
 
     /**
+     * Notification broadcasting service instance
+     *
+     * @var \Crustum\NotificationUI\Service\NotificationBroadcastingService
+     */
+    protected NotificationBroadcastingService $broadcastingService;
+
+    /**
      * Initialize method
      *
      * @return void
@@ -43,6 +52,7 @@ class NotificationsController extends Controller
         /** @var \Crustum\Notification\Model\Table\NotificationsTable $Notifications */
         $Notifications = $this->fetchTable('Crustum/Notification.Notifications');
         $this->Notifications = $Notifications;
+        $this->broadcastingService = new NotificationBroadcastingService();
         $this->viewBuilder()->setClassName('Json');
     }
 
@@ -293,6 +303,21 @@ class NotificationsController extends Controller
         $notification->read_at = new DateTime();
 
         if ($this->Notifications->save($notification)) {
+            $notifiable = $this->getNotifiableIdentity();
+            $userEntity = $this->request->getAttribute('identity')?->getOriginalData();
+
+            if ($userEntity instanceof EntityInterface) {
+                $unreadCount = $this->buildNotificationsQuery()
+                    ->where(['Notifications.read_at IS' => null])
+                    ->count();
+
+                $this->broadcastingService->broadcastMarkAsRead(
+                    $notification->id,
+                    $userEntity,
+                    $unreadCount,
+                );
+            }
+
             $this->set([
                 'success' => true,
                 'message' => __('Notification marked as read'),
@@ -344,6 +369,12 @@ class NotificationsController extends Controller
             ['read_at' => DateTime::now()],
             $conditions,
         );
+
+        $userEntity = $this->request->getAttribute('identity')?->getOriginalData();
+
+        if ($userEntity instanceof EntityInterface) {
+            $this->broadcastingService->broadcastMarkAllAsRead($userEntity, $count);
+        }
 
         $this->set([
             'success' => true,
