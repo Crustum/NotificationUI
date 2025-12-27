@@ -13,4 +13,5 @@
         <exclude-pattern>templates/*</exclude-pattern>
     </rule>
     <exclude-pattern>src/Service/NotificationBroadcastingService.php</exclude-pattern>
+    <exclude-pattern>tests/frontend/node_modules/*</exclude-pattern>
 </ruleset>
