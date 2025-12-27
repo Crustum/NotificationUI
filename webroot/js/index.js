@@ -1,108 +1,81 @@
 /**
- * CakePHP Notification System - Main Entry Point
+ * CakePHP Notification System - Main Entry Point (Alpine.js)
  *
- * Provides a unified API for notifications with pluggable modules.
- * Compatible with both old and new integration patterns.
+ * Initializes Alpine.js store and provides backward compatibility
  */
+(function() {
+    'use strict';
 
-let managerInstance = null;
-let widgetInstance = null;
-let rendererInstance = null;
+    window.initializeNotifications = function(options = {}) {
+        const defaultOptions = {
+            apiUrl: '/notification/notifications/unread.json',
+            pollInterval: 30000,
+            enablePolling: true,
+            perPage: 10,
+            bellId: 'notificationsBell',
+            dropdownId: 'notificationsDropdown',
+            contentId: 'notificationsContent',
+            badgeId: 'notificationsBadge',
+            markReadOnClick: true,
+        };
 
-window.initializeNotifications = function(options = {}) {
-    const defaultOptions = {
-        apiUrl: '/notification/notifications/unread.json',
-        pollInterval: 30000,
-        enablePolling: true,
-        perPage: 10,
-        bellId: 'notificationsBell',
-        dropdownId: 'notificationsDropdown',
-        contentId: 'notificationsContent',
-        badgeId: 'notificationsBadge',
-        markReadOnClick: true,
+        const config = { ...defaultOptions, ...options };
+
+        function init() {
+            if (typeof Alpine === 'undefined') {
+                console.warn('NotificationUI: Alpine.js not yet available, waiting...');
+                setTimeout(init, 50);
+                return;
+            }
+
+            const store = Alpine.store('notifications');
+            if (store && store.manager) {
+                store.manager.options = { ...store.manager.options, ...config };
+                if (config.initialUnreadCount !== undefined) {
+                    store.unreadCount = config.initialUnreadCount;
+                }
+                if (config.enablePolling && config.apiUrl) {
+                    store.manager.startPolling(store);
+                }
+            } else {
+                console.warn('NotificationUI: Store not yet registered, waiting...');
+                setTimeout(init, 50);
+                return;
+            }
+
+            return {
+                store: store,
+                manager: store?.manager
+            };
+        }
+
+        return init();
     };
 
-    const config = { ...defaultOptions, ...options };
-
-    rendererInstance = new window.CakeNotificationRenderer({
-        markReadOnClick: config.markReadOnClick
-    });
-
-    managerInstance = new window.CakeNotificationManager({
-        apiUrl: config.apiUrl,
-        pollInterval: config.pollInterval,
-        enablePolling: config.enablePolling,
-        perPage: config.perPage
-    });
-
-    widgetInstance = new window.CakeNotificationWidget(
-        managerInstance,
-        rendererInstance,
-        {
-            bellId: config.bellId,
-            dropdownId: config.dropdownId,
-            contentId: config.contentId,
-            badgeId: config.badgeId
-        }
-    );
-
-    managerInstance.init();
-
-    window.CakeNotificationManager.instance = managerInstance;
+    window.CakeNotificationManager = window.CakeNotificationManager || {};
     window.CakeNotificationManager.get = () => {
-        if (!managerInstance) {
-            throw new Error('Notification manager not initialized. Call initializeNotifications() first.');
+        if (typeof Alpine === 'undefined') {
+            throw new Error('Alpine.js is not loaded. Ensure Alpine.js is loaded before accessing the notification manager.');
         }
-        return managerInstance;
-    };
-
-    window.CakeNotificationWidget.instance = widgetInstance;
-    window.CakeNotificationWidget.get = () => {
-        if (!widgetInstance) {
-            throw new Error('Notification widget not initialized. Call initializeNotifications() first.');
+        const store = Alpine.store('notifications');
+        if (!store) {
+            throw new Error('Notification store not initialized. Ensure Alpine.js is loaded and components are registered.');
         }
-        return widgetInstance;
+        return store.manager || null;
     };
 
-    window.CakeNotificationRenderer.instance = rendererInstance;
-    window.CakeNotificationRenderer.get = () => {
-        if (!rendererInstance) {
-            throw new Error('Notification renderer not initialized. Call initializeNotifications() first.');
-        }
-        return rendererInstance;
+    window.getNotificationManager = () => window.CakeNotificationManager.get();
+
+    window.registerNotificationModule = (module) => {
+        console.warn('registerNotificationModule is deprecated. Broadcasting modules now auto-initialize.');
+        return null;
     };
 
-    return {
-        manager: managerInstance,
-        widget: widgetInstance,
-        renderer: rendererInstance
-    };
-};
-
-window.CakeNotificationManager = window.CakeNotificationManager || {};
-window.CakeNotificationManager.get = () => {
-    if (!managerInstance) {
-        throw new Error('Notification manager not initialized. Call initializeNotifications() first.');
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = {
+            initializeNotifications: window.initializeNotifications,
+            CakeNotification: window.CakeNotification,
+            CakeNotificationAction: window.CakeNotificationAction,
+        };
     }
-    return managerInstance;
-};
-
-window.getNotificationManager = () => window.CakeNotificationManager.get();
-window.getNotificationWidget = () => window.CakeNotificationWidget.get();
-window.getNotificationRenderer = () => window.CakeNotificationRenderer.get();
-
-window.registerNotificationModule = (module) => {
-    const manager = window.CakeNotificationManager.get();
-    return manager.registerModule(module);
-};
-
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        initializeNotifications: window.initializeNotifications,
-        CakeNotification: window.CakeNotification,
-        CakeNotificationAction: window.CakeNotificationAction,
-        CakeNotificationManager: window.CakeNotificationManager,
-        CakeNotificationRenderer: window.CakeNotificationRenderer,
-        CakeNotificationWidget: window.CakeNotificationWidget
-    };
-}
+})();

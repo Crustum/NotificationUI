@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Crustum\NotificationUI\Test\TestCase\Service;
 
-use Cake\ORM\Entity;
 use Cake\TestSuite\TestCase;
 use Crustum\Broadcasting\Broadcasting;
 use Crustum\Broadcasting\TestSuite\BroadcastingTrait;

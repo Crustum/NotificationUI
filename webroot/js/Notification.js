@@ -108,17 +108,31 @@ class CakeNotification {
     }
 
     send() {
+        if (typeof Alpine !== 'undefined' && Alpine.store('notifications')) {
+            const store = Alpine.store('notifications');
+            store.addNotification(this.toObject());
+            return this;
+        }
         if (typeof window.CakeNotificationManager !== 'undefined' &&
             typeof window.CakeNotificationManager.addNotification === 'function') {
             return window.CakeNotificationManager.addNotification(this.toObject());
         } else {
-            console.warn('CakeNotificationManager not initialized. Call initializeNotifications() first.');
+            console.warn('Notification system not initialized');
             return this;
         }
     }
 
     toObject() {
-        return JSON.parse(JSON.stringify(this._data));
+        const data = JSON.parse(JSON.stringify(this._data));
+        if (data.actions && Array.isArray(data.actions)) {
+            data.actions = data.actions.map(action => {
+                if (action && typeof action.toObject === 'function') {
+                    return action.toObject();
+                }
+                return action;
+            });
+        }
+        return data;
     }
 
     static fromObject(obj) {
@@ -137,4 +151,3 @@ if (typeof module !== 'undefined' && module.exports) {
 } else {
     window.CakeNotification = CakeNotification;
 }
-
