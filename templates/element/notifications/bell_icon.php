@@ -19,12 +19,13 @@
  * @var string $badgeId DOM ID for badge element
  * @var bool $markReadOnClick Mark notification as read on click
  * @var bool|array $broadcasting Enable broadcasting (false or config array)
+ * @var int $unreadCount Initial unread count
  */
 
 use Cake\Core\Configure;
 
 $position = $position ?? 'right';
-$theme = $theme ?? 'light';
+$theme = $theme ?? null;
 $mode = $mode ?? 'dropdown'; // 'dropdown' or 'panel'
 $pollInterval = $pollInterval ?? 30000;
 $apiUrl = $apiUrl ?? '/notification/notifications/unread.json';
@@ -36,6 +37,7 @@ $contentId = $contentId ?? 'notificationsContent';
 $badgeId = $badgeId ?? 'notificationsBadge';
 $markReadOnClick = $markReadOnClick ?? true;
 $broadcasting = $broadcasting ?? false;
+$unreadCount = $unreadCount ?? 0;
 
 if (!$enablePolling) {
     $apiUrl = null;
@@ -74,49 +76,88 @@ if ($broadcasting && is_array($broadcasting)) {
 }
 ?>
 
-<div class="notifications-wrapper notifications-mode-<?= h($mode) ?>" data-theme="<?= h($theme) ?>">
-    <a class="notifications-bell"
-            id="<?= h($bellId) ?>"
-            aria-label="Notifications"
-            aria-expanded="false"
-            aria-haspopup="true">
+<div class="notifications-wrapper notifications-mode-<?= h($mode) ?>"
+     <?php if ($theme !== null): ?>data-theme="<?= h($theme) ?>"<?php endif; ?>
+     x-data="notificationBell({
+         position: '<?= h($position) ?>',
+         <?php if ($theme !== null): ?>theme: '<?= h($theme) ?>',<?php endif; ?>
+         mode: '<?= h($mode) ?>',
+         bellId: '<?= h($bellId) ?>',
+         dropdownId: '<?= h($dropdownId) ?>',
+         contentId: '<?= h($contentId) ?>',
+         badgeId: '<?= h($badgeId) ?>',
+         markReadOnClick: <?= $markReadOnClick ? 'true' : 'false' ?>
+     })"
+     @click.outside="handleClickOutside($event)">
+    <a href="#"
+       class="notifications-bell"
+       id="<?= h($bellId) ?>"
+       @click.prevent="toggle()"
+       :aria-expanded="$store.notifications.isOpen"
+       aria-label="Notifications"
+       aria-haspopup="true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
         </svg>
-        <span class="notifications-badge" id="<?= h($badgeId) ?>" aria-label="Unread notifications" style="display: none;">0</span>
+        <?php if ($unreadCount > 0): ?>
+        <span class="notifications-badge"
+              id="<?= h($badgeId) ?>"
+              x-show="$store && $store.notifications && $store.notifications.unreadCount > 0"
+              x-text="$store && $store.notifications ? $store.notifications.unreadCount : <?= (int)$unreadCount ?>"
+              aria-label="Unread notifications">
+            <?= (int)$unreadCount ?>
+        </span>
+        <?php else: ?>
+        <span class="notifications-badge"
+              id="<?= h($badgeId) ?>"
+              x-show="$store && $store.notifications && $store.notifications.unreadCount > 0"
+              x-text="$store && $store.notifications ? $store.notifications.unreadCount : ''"
+              aria-label="Unread notifications"
+              style="display: none;">
+        </span>
+        <?php endif; ?>
     </a>
 
     <div class="notifications-dropdown notifications-<?= h($theme) ?> notifications-position-<?= h($position) ?>"
          id="<?= h($dropdownId) ?>"
+         x-show="$store.notifications.isOpen"
+         :class="$store.notifications.isOpen ? 'notifications-open' : ''"
+         x-cloak
          role="dialog"
          aria-labelledby="notifications-title"
-         aria-modal="true"
-         style="display: none;">
+         aria-modal="true">
         <div class="notifications-header">
             <h3 class="notifications-title" id="notifications-title">Notifications</h3>
-            <a href="#" class="notifications-mark-all-btn"
-               data-action="markAllRead"
-               title="Mark all as read"
-               aria-label="Mark all notifications as read">
+            <button type="button"
+                    class="notifications-mark-all-btn"
+                    @click="$store.notifications.markAllAsRead()"
+                    title="Mark all as read"
+                    aria-label="Mark all notifications as read">
                 Mark All
-            </a>
+            </button>
         </div>
         <div class="notifications-content"
              id="<?= h($contentId) ?>"
+             x-data="notificationList()"
              role="list"
              aria-live="polite"
              aria-label="Notification list">
-            <div class="notifications-loading">Loading...</div>
+            <?= $this->element('Crustum/NotificationUI.notifications/templates') ?>
         </div>
     </div>
 
     <?php if ($mode === 'panel'): ?>
-        <div class="notifications-backdrop" id="notificationsBackdrop" style="display: none;"></div>
+        <div class="notifications-backdrop"
+             id="notificationsBackdrop"
+             x-show="$store.notifications.isOpen"
+             x-cloak
+             @click="$store.notifications.setOpen(false)">
+        </div>
     <?php endif; ?>
 </div>
-
-<?= $this->Html->css('Crustum/NotificationUI.notifications', ['raw' => Configure::read('debug')]) ?>
+<?= $this->AssetCompress->css('Crustum/NotificationUI.notifications', ['raw' => Configure::read('debug')]) ?>
+<?= $this->AssetCompress->script('Crustum/NotificationUI.alpine.js', ['raw' => Configure::read('debug'), 'defer' => true]) ?>
 <?= $this->AssetCompress->script('Crustum/NotificationUI.notifications', ['raw' => Configure::read('debug')]) ?>
 
 <?php if ($broadcastingConfig): ?>
@@ -131,6 +172,8 @@ window.broadcastingConfig = <?= json_encode($broadcastingConfig) ?>;
 </script>
 <?php endif; ?>
 
+<?= $this->element('Crustum/NotificationUI.notifications/templates') ?>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     window.initializeNotifications({
@@ -142,7 +185,11 @@ document.addEventListener('DOMContentLoaded', function() {
         dropdownId: <?= json_encode($dropdownId) ?>,
         contentId: <?= json_encode($contentId) ?>,
         badgeId: <?= json_encode($badgeId) ?>,
-        markReadOnClick: <?= json_encode($markReadOnClick) ?>
+        markReadOnClick: <?= json_encode($markReadOnClick) ?>,
+        position: <?= json_encode($position) ?>,
+        theme: <?= json_encode($theme) ?>,
+        mode: <?= json_encode($mode) ?>,
+        initialUnreadCount: <?= (int)$unreadCount ?>
     });
 });
 </script>

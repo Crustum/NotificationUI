@@ -1,10 +1,10 @@
 /**
- * CakePHP Notification Manager
+ * Notification Manager - API Client & Composables
  *
- * Manages notification state, API communication, and polling.
- * Central hub for all notification operations.
+ * Handles API communication, polling, and provides composable functions
+ * for use with Alpine.js components
  */
-class CakeNotificationManager {
+class NotificationManager {
     constructor(options = {}) {
         this.options = {
             apiUrl: '/notification/notifications/unread.json',
@@ -14,57 +14,14 @@ class CakeNotificationManager {
             ...options
         };
 
-        this.notifications = [];
-        this.unreadCount = 0;
         this.lastCheckTime = null;
-        this.isLoading = false;
         this.pollTimer = null;
-        this.listeners = {};
-        this.modules = [];
-    }
-
-    registerModule(module) {
-        this.modules.push(module);
-        if (typeof module.init === 'function') {
-            module.init(this);
-        }
-        return this;
-    }
-
-    async init() {
-        if (this.options.enablePolling && this.options.apiUrl) {
-            await this.loadNotifications();
-            this.startPolling();
-        }
-        return this;
-    }
-
-    addNotification(notification) {
-        const exists = this.notifications.find(n => n.id === notification.id);
-        if (!exists) {
-            notification._isNew = true;
-            this.notifications.unshift(notification);
-
-            if (!notification.read_at) {
-                this.unreadCount++;
-            }
-
-            this.emit('notification:added', { notification });
-            this.emit('notifications:changed', { notifications: this.notifications });
-
-            setTimeout(() => {
-                notification._isNew = false;
-                this.emit('notifications:changed', { notifications: this.notifications });
-            }, 5000);
-        }
-        return this;
     }
 
     async loadNotifications(page = 1, append = false) {
-        if (this.isLoading || !this.options.apiUrl) return;
-
-        this.isLoading = true;
-        this.emit('notifications:loading', { page, append });
+        if (!this.options.apiUrl) {
+            return { success: false, data: [], hasMore: false };
+        }
 
         try {
             const url = new URL(this.options.apiUrl, window.location.origin);
@@ -79,81 +36,66 @@ class CakeNotificationManager {
                 credentials: 'same-origin'
             });
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
 
             const result = await response.json();
 
             if (result.success) {
-                this.handleLoadSuccess(result, append);
+                this.lastCheckTime = new Date();
+                const unreadCount = result.meta?.unread_count ?? result.meta?.count ?? result.unreadCount ?? 0;
+                return {
+                    success: true,
+                    data: result.data.map(n => this.normalizeNotification(n)),
+                    hasMore: result.pagination?.has_next_page ?? result.pagination?.hasMore ?? false,
+                    unreadCount: unreadCount
+                };
             } else {
                 throw new Error(result.message || 'Failed to load');
             }
         } catch (error) {
-            this.emit('notifications:error', { error });
-        } finally {
-            this.isLoading = false;
-            this.emit('notifications:loaded');
+            console.error('Failed to load notifications:', error);
+            return { success: false, data: [], hasMore: false, error };
         }
     }
 
-    handleLoadSuccess(result, append) {
-        const normalizeNotification = (notification) => {
-            if (notification.data?.actions && !notification.actions) {
-                notification.actions = notification.data.actions;
+        async markAsRead(id) {
+            const isLocalNotification = typeof id === 'string' && id.startsWith('notif-');
+            if (isLocalNotification) {
+                return true;
             }
-            notification._source = 'api';
-            return notification;
-        };
 
-        if (append) {
-            const normalized = (result.data || []).map(normalizeNotification);
-            this.notifications = this.notifications.concat(normalized);
-        } else {
-            const preserved = this.notifications.filter(n => n._source !== 'api');
-            const preservedIds = new Set(preserved.map(n => n.id));
-            const apiItems = (result.data || [])
-                .filter(n => !preservedIds.has(n.id))
-                .map(normalizeNotification);
-            this.notifications = preserved.concat(apiItems);
-            this.lastCheckTime = new Date();
-        }
+            try {
+                const response = await fetch(`/notification/notifications/${id}/read.json`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-Token': this.getCsrfToken()
+                    },
+                    credentials: 'same-origin'
+                });
 
-        this.unreadCount = result.meta?.count || 0;
-        this.emit('notifications:changed', {
-            notifications: this.notifications,
-            pagination: result.pagination
-        });
-    }
-
-    async markAsRead(notificationId) {
-        try {
-            const response = await fetch(`/notification/notifications/${notificationId}/read.json`, {
-                method: 'PATCH',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-Token': this.getCsrfToken()
-                },
-                credentials: 'same-origin'
-            });
-
-            if (response.ok) {
-                await this.loadNotifications();
-                this.emit('notification:marked-read', { notificationId });
-            } else {
-                const notification = this.notifications.find(n => n.id === notificationId);
-                if (notification && notification._source !== 'api') {
-                    this.removeNotification(notificationId);
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { message: errorText };
+                    }
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
                 }
+
+                const result = await response.json();
+                return result.success || false;
+            } catch (error) {
+                console.error('Failed to mark notification as read:', error);
+                throw error;
             }
-        } catch (error) {
-            const notification = this.notifications.find(n => n.id === notificationId);
-            if (notification && notification._source !== 'api') {
-                this.removeNotification(notificationId);
-            }
-            this.emit('notifications:error', { error });
         }
-    }
 
     async markAllAsRead() {
         try {
@@ -161,48 +103,87 @@ class CakeNotificationManager {
                 method: 'PATCH',
                 headers: {
                     'Accept': 'application/json',
+                    'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-Token': this.getCsrfToken()
                 },
                 credentials: 'same-origin'
             });
 
-            if (response.ok) {
-                this.notifications = [];
-                this.unreadCount = 0;
-                this.emit('notifications:changed', { notifications: [] });
-                this.emit('notifications:all-marked-read');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
             }
+
+            const result = await response.json();
+            return result.success || false;
         } catch (error) {
-            this.emit('notifications:error', { error });
+            console.error('Failed to mark all notifications as read:', error);
+            return false;
         }
     }
 
-    clearAllNotifications() {
-        this.notifications = [];
-        this.unreadCount = 0;
-        this.emit('notifications:changed', { notifications: [] });
-        this.emit('notifications:all-marked-read');
-    }
+    async deleteNotification(id) {
+        try {
+            const response = await fetch(`/notification/notifications/${id}.json`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-Token': this.getCsrfToken()
+                },
+                credentials: 'same-origin'
+            });
 
-    removeNotification(notificationId) {
-        const index = this.notifications.findIndex(n => n.id === notificationId);
-        if (index !== -1) {
-            const notification = this.notifications[index];
-            if (!notification.read_at) {
-                this.unreadCount = Math.max(0, this.unreadCount - 1);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
             }
-            this.notifications.splice(index, 1);
-            this.emit('notification:removed', { notificationId });
-            this.emit('notifications:changed', { notifications: this.notifications });
+
+            const result = await response.json();
+            return result.success || false;
+        } catch (error) {
+            console.error('Failed to delete notification:', error);
+            return false;
         }
     }
 
-    startPolling() {
+    normalizeNotification(notification) {
+        const normalized = {
+            id: notification.id,
+            title: notification.data?.title || notification.title || '',
+            message: notification.data?.message || notification.message || '',
+            type: notification.type || '',
+            data: notification.data || {},
+            created_at: notification.created_at || notification.created || new Date().toISOString(),
+            read_at: notification.read_at || null
+        };
+
+        if (!normalized.data.icon && normalized.type) {
+            const iconMap = {
+                'success': 'check',
+                'danger': 'alert',
+                'error': 'alert',
+                'warning': 'alert',
+                'info': 'info'
+            };
+            if (iconMap[normalized.type]) {
+                normalized.data.icon = iconMap[normalized.type];
+            }
+        }
+
+        if (notification.actions && Array.isArray(notification.actions)) {
+            normalized.actions = this.normalizeActions(notification.actions);
+        } else if (notification.data?.actions && Array.isArray(notification.data.actions)) {
+            normalized.actions = this.normalizeActions(notification.data.actions);
+        }
+
+        return normalized;
+    }
+
+    startPolling(store) {
         if (!this.options.enablePolling || !this.options.apiUrl) return;
         if (this.options.pollInterval > 0) {
             this.pollTimer = setInterval(() => {
-                this.checkForNewNotifications();
+                this.checkForNewNotifications(store);
             }, this.options.pollInterval);
         }
     }
@@ -214,8 +195,8 @@ class CakeNotificationManager {
         }
     }
 
-    async checkForNewNotifications() {
-        if (this.isLoading || !this.lastCheckTime) return;
+    async checkForNewNotifications(store) {
+        if (!this.lastCheckTime) return;
 
         try {
             const url = new URL(this.options.apiUrl, window.location.origin);
@@ -235,59 +216,28 @@ class CakeNotificationManager {
             const result = await response.json();
 
             if (result.success && result.data.length > 0) {
-                const existingIds = new Set(this.notifications.map(n => n.id));
-                const newNotifications = result.data.filter(notif => {
-                    const notifTime = new Date(notif.created_at || notif.created);
-                    if (notifTime <= this.lastCheckTime) {
-                        return false;
-                    }
-                    if (existingIds.has(notif.id)) {
-                        return false;
-                    }
-                    return true;
-                });
+                const existingIds = new Set(store.items.map(n => n.id));
+                const newNotifications = result.data
+                    .map(n => this.normalizeNotification(n))
+                    .filter(notif => {
+                        const notifTime = new Date(notif.created_at);
+                        if (notifTime <= this.lastCheckTime) {
+                            return false;
+                        }
+                        if (existingIds.has(notif.id)) {
+                            return false;
+                        }
+                        return true;
+                    });
 
                 newNotifications.forEach(notif => {
-                    if (notif.data?.actions && !notif.actions) {
-                        notif.actions = notif.data.actions;
-                    }
                     notif._isNew = true;
-                    this.addNotification(notif);
+                    store.addNotification(notif);
                 });
             }
         } catch (error) {
             console.error('Failed to check for new notifications:', error);
         }
-    }
-
-    on(event, callback) {
-        if (!this.listeners[event]) {
-            this.listeners[event] = [];
-        }
-        this.listeners[event].push(callback);
-        return this;
-    }
-
-    off(event, callback) {
-        if (!this.listeners[event]) return this;
-        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
-        return this;
-    }
-
-    emit(event, data = {}) {
-        if (this.listeners[event]) {
-            this.listeners[event].forEach(callback => callback(data));
-        }
-        window.dispatchEvent(new CustomEvent(event, { detail: data }));
-        return this;
-    }
-
-    getNotifications() {
-        return [...this.notifications];
-    }
-
-    getUnreadCount() {
-        return this.unreadCount;
     }
 
     getCsrfToken() {
@@ -298,15 +248,125 @@ class CakeNotificationManager {
         return meta ? meta.getAttribute('content') : '';
     }
 
+    formatTimeAgo(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+
+        if (isNaN(date.getTime())) {
+            return dateString;
+        }
+
+        const seconds = Math.floor((now - date) / 1000);
+        if (seconds < 0) return 'just now';
+        if (seconds < 60) return 'just now';
+
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+
+        const days = Math.floor(hours / 24);
+        if (days < 7) return `${days}d ago`;
+
+        if (days < 30) {
+            const weeks = Math.floor(days / 7);
+            return `${weeks}w ago`;
+        }
+
+        return date.toLocaleDateString();
+    }
+
+    normalizeActions(actions) {
+        if (!Array.isArray(actions)) {
+            return [];
+        }
+
+        return actions.map(action => {
+            if (!action || typeof action !== 'object') {
+                return null;
+            }
+
+            const normalized = {
+                name: action.name || null,
+                label: action.label || action.name || 'Action',
+                url: action.url || null,
+                icon: action.icon || null,
+                color: action.color || action.type || null,
+                type: action.type || action.color || null,
+                isDisabled: action.isDisabled === true || action.disabled === true,
+                openInNewTab: action.openInNewTab === true || action.target === '_blank',
+                event: action.event || null,
+                eventData: action.eventData || {},
+                shouldClose: action.shouldClose === true
+            };
+
+            if (!normalized.color && normalized.type) {
+                normalized.color = normalized.type;
+            }
+
+            return normalized;
+        }).filter(action => action !== null);
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    getNotificationIcon(notification) {
+        if (notification.data?.icon_class) {
+            return `<span class="${this.escapeHtml(notification.data.icon_class)}"></span>`;
+        }
+        if (notification.data?.icon) {
+            const iconMap = {
+                'bell': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+                'post': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+                'user': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+                'message': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+                'alert': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+                'check': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+                'info': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+            };
+            return iconMap[notification.data.icon] || iconMap['bell'];
+        }
+        return null;
+    }
+
+    getNotificationTitle(notification) {
+        if (notification.data && notification.data.title) {
+            return notification.data.title;
+        }
+        if (notification.title) {
+            return notification.title;
+        }
+        const parts = (notification.type || '').split('\\');
+        const className = parts[parts.length - 1];
+        return className.replace(/([A-Z])/g, ' $1').trim();
+    }
+
+    getNotificationMessage(notification) {
+        if (notification.data && notification.data.message) {
+            return notification.data.message;
+        }
+        if (notification.message) {
+            return notification.message;
+        }
+        if (notification.data && notification.data.title) {
+            return notification.data.title;
+        }
+        return 'You have a new notification';
+    }
+
     destroy() {
         this.stopPolling();
-        this.listeners = {};
     }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { NotificationManager: CakeNotificationManager };
+    module.exports = { NotificationManager };
 } else {
-    window.CakeNotificationManager = CakeNotificationManager;
+    window.NotificationManager = NotificationManager;
 }
-

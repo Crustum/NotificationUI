@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0]
+
+### Changed
+
+- **Complete rewrite to Alpine.js**: Migrated from vanilla JavaScript to Alpine.js for reactive state management and declarative UI
+- **CakePHP Cell architecture**: Refactored notification bell to use `NotificationBellCell` for better component organization and separation of concerns
+- **Broadcasting architecture**: Introduced `BroadcastingBase` abstract class eliminating 42% code duplication between Pusher and Mercure modules
+
+### Added
+
+- **Alpine.js store**: New `NotificationStore` providing centralized state management with reactive updates
+- **Automatic theme detection**: Support for light/dark theme detection with system preference fallback
+- **Template customization**: Server-side PHP templates can now be overridden via CakePHP element system
+
 ## [1.0.3]
 
 ### Added

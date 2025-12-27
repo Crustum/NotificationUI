@@ -1,0 +1,35 @@
+name: Frontend Tests
+
+on:
+  push:
+    paths:
+      - 'tests/frontend/**'
+      - 'webroot/js/**'
+      - '.github/workflows/frontend-tests.yml'
+  pull_request:
+    paths:
+      - 'tests/frontend/**'
+      - 'webroot/js/**'
+      - '.github/workflows/frontend-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: tests/frontend
+        run: npm install
+
+      - name: Run tests
+        working-directory: tests/frontend
+        run: npm test -- --run
+
