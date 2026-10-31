@@ -84,15 +84,6 @@
         {
             "type": "vcs",
             "url": "git@github.com:skie/cakephp-queue.git"
-        },
-        {
-            "type": "path",
-            "url": "../BroadcastingNotification",
-            "options": {
-                "versions": {
-                    "crustum/notification-broadcasting": "2.x-dev"
-                }
-            }
         }
     ]
 }
