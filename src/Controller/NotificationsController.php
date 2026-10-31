@@ -5,9 +5,11 @@ namespace Crustum\NotificationUI\Controller;
 
 use Cake\Controller\Controller;
 use Cake\Datasource\EntityInterface;
+use Cake\Datasource\Exception\RecordNotFoundException;
 use Cake\Datasource\QueryInterface;
 use Cake\I18n\DateTime;
 use Cake\ORM\Locator\LocatorAwareTrait;
+use Crustum\Notification\Model\Entity\Notification;
 use Crustum\Notification\Model\Table\NotificationsTable;
 use Crustum\NotificationUI\Service\NotificationBroadcastingService;
 use Exception;
@@ -49,9 +51,11 @@ class NotificationsController extends Controller
         if ($this->components()->has('Authentication')) {
             $this->loadComponent('Authentication.Authentication');
         }
+
         /** @var \Crustum\Notification\Model\Table\NotificationsTable $Notifications */
         $Notifications = $this->fetchTable('Crustum/Notification.Notifications');
         $this->Notifications = $Notifications;
+
         $this->broadcastingService = new NotificationBroadcastingService();
         $this->viewBuilder()->setClassName('Json');
     }
@@ -107,17 +111,24 @@ class NotificationsController extends Controller
      * @param string $notificationId Notification ID
      * @return \Crustum\Notification\Model\Entity\Notification|null
      */
-    protected function verifyNotificationOwnership(string $notificationId)
+    protected function verifyNotificationOwnership(string $notificationId): ?Notification
     {
         $notifiable = $this->getNotifiableIdentity();
 
-        return $this->Notifications->find()
-            ->where([
-                'Notifications.id' => $notificationId,
-                'Notifications.model' => $notifiable['model'],
-                'Notifications.foreign_key' => $notifiable['id'],
-            ])
-            ->first();
+        try {
+            $notification = $this->Notifications->get($notificationId);
+        } catch (RecordNotFoundException) {
+            return null;
+        }
+
+        if (
+            $notification->model !== $notifiable['model']
+            || (string)$notification->foreign_key !== (string)$notifiable['id']
+        ) {
+            return null;
+        }
+
+        return $notification;
     }
 
     /**
@@ -167,7 +178,7 @@ class NotificationsController extends Controller
                 ],
             ]);
             $this->viewBuilder()->setOption('serialize', ['success', 'data', 'pagination', 'meta']);
-        } catch (Exception $e) {
+        } catch (Exception) {
             $this->response = $this->response->withStatus(500);
             $this->set([
                 'success' => false,
@@ -220,7 +231,7 @@ class NotificationsController extends Controller
                 ],
             ]);
             $this->viewBuilder()->setOption('serialize', ['success', 'data', 'pagination', 'meta']);
-        } catch (Exception $e) {
+        } catch (Exception) {
             $this->response = $this->response->withStatus(500);
             $this->set([
                 'success' => false,
@@ -243,7 +254,7 @@ class NotificationsController extends Controller
 
         $notification = $this->verifyNotificationOwnership($id);
 
-        if (!$notification) {
+        if (!$notification instanceof Notification) {
             $this->response = $this->response->withStatus(404);
             $this->set([
                 'success' => false,
@@ -274,7 +285,7 @@ class NotificationsController extends Controller
 
         $notification = $this->verifyNotificationOwnership($id);
 
-        if (!$notification) {
+        if (!$notification instanceof Notification) {
             $this->response = $this->response->withStatus(404);
             $this->set([
                 'success' => false,
@@ -286,7 +297,7 @@ class NotificationsController extends Controller
             return;
         }
 
-        if ($notification->read_at !== null) {
+        if ($notification->read_at instanceof DateTime) {
             $this->set([
                 'success' => true,
                 'message' => __('Notification was already read'),
@@ -300,7 +311,7 @@ class NotificationsController extends Controller
             return;
         }
 
-        $notification->read_at = new DateTime();
+        $notification->markAsRead();
 
         if ($this->Notifications->save($notification)) {
             $userEntity = $this->request->getAttribute('identity')?->getOriginalData();
@@ -397,7 +408,7 @@ class NotificationsController extends Controller
 
         $notification = $this->verifyNotificationOwnership($id);
 
-        if (!$notification) {
+        if (!$notification instanceof Notification) {
             $this->response = $this->response->withStatus(404);
             $this->set([
                 'success' => false,

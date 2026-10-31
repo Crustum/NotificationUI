@@ -5,6 +5,7 @@ namespace TestApp\Controller;
 
 use Cake\Controller\Controller;
 use Cake\Event\EventInterface;
+use Cake\Http\Response;
 
 /**
  * Posts Controller
@@ -17,9 +18,9 @@ class PostsController extends Controller
      * Before filter callback
      *
      * @param \Cake\Event\EventInterface $event Event
-     * @return \Cake\Http\Response|null|void
+     * @return void
      */
-    public function beforeFilter(EventInterface $event)
+    public function beforeFilter(EventInterface $event): void
     {
         parent::beforeFilter($event);
     }
@@ -30,7 +31,7 @@ class PostsController extends Controller
      * @param int $id Post ID
      * @return \Cake\Http\Response|null
      */
-    public function publish(int $id)
+    public function publish(int $id): ?Response
     {
         $this->request->allowMethod(['post', 'put']);
 

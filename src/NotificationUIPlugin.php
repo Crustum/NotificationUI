@@ -19,7 +19,7 @@ class NotificationUIPlugin extends BasePlugin
      */
     public function routes(RouteBuilder $routes): void
     {
-        $routes->plugin('Crustum/NotificationUI', ['path' => '/notification'], function (RouteBuilder $builder): void {
+        $routes->plugin('Crustum/NotificationUI', function (RouteBuilder $builder): void {
             $builder->setExtensions(['json']);
 
             $builder->get('/notifications', ['controller' => 'Notifications', 'action' => 'index']);
@@ -38,7 +38,7 @@ class NotificationUIPlugin extends BasePlugin
 
             $builder->delete('/notifications/{id}', ['controller' => 'Notifications', 'action' => 'delete'])
                 ->setPass(['id']);
-        });
+        }, ['path' => '/notification']);
 
         parent::routes($routes);
     }

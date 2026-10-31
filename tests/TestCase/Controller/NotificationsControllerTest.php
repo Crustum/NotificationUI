@@ -8,6 +8,8 @@ use Cake\ORM\TableRegistry;
 use Cake\TestSuite\IntegrationTestTrait;
 use Cake\TestSuite\TestCase;
 use Crustum\Notification\Model\Entity\Notification;
+use TestApp\Model\Entity\User;
+use TestApp\Notification\PostPublished;
 
 /**
  * Notifications Controller Test Case
@@ -29,12 +31,12 @@ class NotificationsControllerTest extends TestCase
     ];
 
     /**
-     * @var \Crustum\Notification\Test\TestApp\Model\Entity\User
+     * @var \TestApp\Model\Entity\User
      */
     protected $user1;
 
     /**
-     * @var \Crustum\Notification\Test\TestApp\Model\Entity\User
+     * @var \TestApp\Model\Entity\User
      */
     protected $user2;
 
@@ -68,7 +70,7 @@ class NotificationsControllerTest extends TestCase
         $defaults = [
             'model' => 'TestApp.Users',
             'foreign_key' => '550e8400-e29b-41d4-a716-446655440100',
-            'type' => 'TestApp\Notification\PostPublished',
+            'type' => PostPublished::class,
             'data' => ['message' => 'Test notification'],
             'read_at' => null,
         ];
@@ -95,7 +97,7 @@ class NotificationsControllerTest extends TestCase
         $this->assertResponseOk();
         $this->assertContentType('application/json');
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
         $this->assertArrayHasKey('data', $response);
@@ -121,7 +123,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertCount(2, $response['data']);
     }
@@ -143,7 +145,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
         $this->assertCount(2, $response['data']);
@@ -165,7 +167,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
         $this->assertEquals($notification->id, $response['data']['id']);
@@ -202,7 +204,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
         $this->assertEquals('Notification marked as read', $response['message']);
@@ -230,7 +232,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
         $this->assertEquals('Notification was already read', $response['message']);
@@ -252,7 +254,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
         $this->assertEquals(2, $response['data']['marked_count']);
@@ -298,7 +300,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
 
@@ -342,7 +344,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertTrue($response['success']);
         $this->assertEquals(2, $response['data']['deleted_count']);
@@ -370,7 +372,7 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertCount(10, $response['data']);
         $this->assertEquals(1, $response['pagination']['current_page']);
@@ -398,18 +400,34 @@ class NotificationsControllerTest extends TestCase
 
         $this->assertResponseOk();
 
-        $response = json_decode((string)$this->_response->getBody(), true);
+        $response = $this->getResponseBody();
 
         $this->assertCount(2, $response['data']);
     }
 
     /**
+     * Get response body as array, with null safety
+     *
+     * @return array<string, mixed>
+     */
+    protected function getResponseBody(): array
+    {
+        $this->assertNotNull($this->response);
+        $body = $this->response->getBody();
+
+        $decoded = json_decode((string)$body, true);
+        $this->assertIsArray($decoded);
+
+        return $decoded;
+    }
+
+    /**
      * Mock authentication identity
      *
-     * @param \Crustum\Notification\Test\TestApp\Model\Entity\User $user User entity
+     * @param \TestApp\Model\Entity\User $user User entity
      * @return void
      */
-    protected function mockAuthIdentity($user): void
+    protected function mockAuthIdentity(User $user): void
     {
         $this->session(['Auth' => $user]);
     }

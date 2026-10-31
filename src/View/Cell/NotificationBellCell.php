@@ -57,9 +57,7 @@ class NotificationBellCell extends Cell
         ?array $pusherConfig = null,
         array $options = [],
     ): void {
-        if ($unreadCount === null) {
-            $unreadCount = $this->calculateUnreadCount();
-        }
+        $unreadCount ??= $this->calculateUnreadCount();
 
         $this->set([
             'position' => $position,
@@ -124,7 +122,7 @@ class NotificationBellCell extends Cell
                     'Notifications.read_at IS' => null,
                 ])
                 ->count();
-        } catch (Exception $e) {
+        } catch (Exception) {
             return 0;
         }
     }

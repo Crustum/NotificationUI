@@ -27,7 +27,7 @@ class NotificationBroadcastingService
      */
     public function isBroadcastingEnabled(): bool
     {
-        if (!class_exists('Crustum\Broadcasting\Broadcasting')) {
+        if (!class_exists(\Crustum\Broadcasting\Broadcasting::class)) {
             return false;
         }
 
@@ -37,7 +37,7 @@ class NotificationBroadcastingService
 
         $configured = \Crustum\Broadcasting\Broadcasting::configured();
 
-        return !empty($configured);
+        return $configured !== [];
     }
 
     /**

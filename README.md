@@ -8,7 +8,7 @@ The plugin provides RESTful JSON API endpoints for notification management, even
 
 ## Requirements
 
-* PHP 8.2+
+* PHP 8.5+
 * CakePHP Notification Plugin
 
 See [Versions.md](docs/Versions.md) for the supported CakePHP versions.

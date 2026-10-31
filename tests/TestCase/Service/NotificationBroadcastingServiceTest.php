@@ -26,7 +26,7 @@ class NotificationBroadcastingServiceTest extends TestCase
     {
         parent::setUp();
 
-        if (class_exists('Crustum\Broadcasting\Broadcasting')) {
+        if (class_exists(Broadcasting::class)) {
             $this->setupTestBroadcaster();
         }
     }
@@ -38,7 +38,7 @@ class NotificationBroadcastingServiceTest extends TestCase
      */
     protected function tearDown(): void
     {
-        if (class_exists('Crustum\Broadcasting\Broadcasting')) {
+        if (class_exists(Broadcasting::class)) {
             TestBroadcaster::clearBroadcasts();
             Broadcasting::drop('default');
         }
@@ -70,7 +70,7 @@ class NotificationBroadcastingServiceTest extends TestCase
      */
     public function testBroadcastMarkAsReadSendsEvent(): void
     {
-        if (!class_exists('Crustum\Broadcasting\Broadcasting')) {
+        if (!class_exists(Broadcasting::class)) {
             $this->markTestSkipped('Broadcasting plugin not available');
         }
 
@@ -92,7 +92,7 @@ class NotificationBroadcastingServiceTest extends TestCase
      */
     public function testBroadcastMarkAllAsReadSendsEvent(): void
     {
-        if (!class_exists('Crustum\Broadcasting\Broadcasting')) {
+        if (!class_exists(Broadcasting::class)) {
             $this->markTestSkipped('Broadcasting plugin not available');
         }
 
